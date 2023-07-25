@@ -1,46 +1,124 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
+
+#define MB_SIZE 1024
 
 #ifndef PORT
 #define PORT 8080
 #endif
 
-int main(void) {
+typedef struct { 
+  char * name;
+  char * address;
+  int port;
+  struct sockaddr_in core;
+  int fd;
+} HTTPServer;
 
-  struct sockaddr_in server_address;
-  server_address.sin_family = AF_INET;
-  server_address.sin_port = htons(PORT);
-  server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
+HTTPServer openHTTPServer(char * name, char * address, int port) {
+  HTTPServer server;
 
-  int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-  int is_binded = bind(server_fd, (struct sockaddr *) &server_address, sizeof(server_address));
+  struct sockaddr_in serverCore;
+  serverCore.sin_family = AF_INET;
+  serverCore.sin_port = htons(port);
+  serverCore.sin_addr.s_addr = inet_addr(address);
 
-  if (is_binded != 0) {
-    fprintf(stderr, "ERROR: the port: %d is closed.\n", PORT);
+  server.name = &name[0];
+  server.address = &address[0];
+  server.port = port;
+  server.core = serverCore;
+  server.fd = socket(AF_INET, SOCK_STREAM, 0);
+
+  int isBinded = bind(server.fd, (struct sockaddr *) &(server.core), sizeof(server.core));
+
+  if (isBinded != 0) {
+    fprintf(stderr, "ERROR: the port: %d is already open.\n", PORT);
     exit(-1);
   }
 
-  listen(server_fd, 0);
-  printf("> server is listening on port: %d.\n", PORT);
+  listen(server.fd, 0);
 
-  struct sockaddr_in client_address;
-  while (1) {
-    int client_size = sizeof(client_address);
-    int client_fd = accept(server_fd, (struct sockaddr *) &client_address, (socklen_t*)&client_size);
+  return server;
+}
 
-    unsigned char data_buffer[1024];
-    int receivedDataSize = recv(client_fd, data_buffer, 1024, 0);
-    printf("the server got %d bytes.\n", receivedDataSize);
+typedef struct {
+  int fd;
+  struct sockaddr_in core;
+} HTTPClient;
   
-    char message[] = "HTTP/1.1 200 OK\nServer: MCHS\nContent-Type: text/html\nConnection: close\n\n<h1>hello world</h1>";
-    send(client_fd, message, sizeof(message), MSG_OOB);
-    close(client_fd);
+typedef struct {
+  bool isValid;
+  char * header;
+  char * body;
+} HTTPRequest; 
+
+HTTPRequest serializeHTTPRequest(char * buffer) {
+  char * delimitler = strstr(buffer, "\r\n\r\n");
+
+  if (delimitler == NULL) 
+    return (HTTPRequest) { 0 };
+  
+  int header_size = (int) (delimitler - buffer);
+
+  HTTPRequest request = {
+    .isValid = true,
+    .header = (char *) calloc(header_size, sizeof(char)),
+    .body = delimitler + 5
+  };
+
+  memcpy(request.header, buffer, header_size);
+
+  return request;
+}
+
+typedef struct {
+  char * header;
+  char * body;
+} HTTPResponse; 
+
+void sendHTTPResponse(HTTPClient client, HTTPResponse response) {
+  char message[strlen(response.header) + strlen(response.body) + 4];
+  sprintf(message, "%s\r\n\r\n%s", response.header, response.body);
+  send(client.fd, message, sizeof(message), MSG_OOB);
+}
+
+int main(void) {
+  HTTPServer server = openHTTPServer("MCHS", "127.0.0.1", PORT);
+  HTTPClient client;
+
+  printf("> %s is listening on port: %d.\n", server.name, server.port);
+
+  while (true) {
+    int client_size = sizeof(client.core);
+    client.fd = accept(server.fd, (struct sockaddr *) &client.core, (socklen_t*)&client_size);
+
+    char request_buffer[3 * MB_SIZE];
+    int receivedDataSize = recv(client.fd, request_buffer, 3 * MB_SIZE, 0);
+
+    HTTPRequest request = serializeHTTPRequest(request_buffer);
+
+    printf("the server %s got %d bytes of data.\n", server.name, receivedDataSize);
+
+    HTTPResponse response = {
+      .header = "HTTP/1.1 200 OK\nContent-Type: text/plain\nConnection: close",
+      .body = "oi cara de boi."
+    };
+
+    if (request.isValid) {
+      printf("%s\n", request.header);
+    }
+
+    sendHTTPResponse(client, response);
+    free(request.header);
+    close(client.fd);
   }
 
-  shutdown(server_fd, 0);
+  shutdown(server.fd, 0);
   return 0;
 }
