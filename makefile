@@ -1,7 +1,7 @@
 CC = gcc
 CFILE = ./src/main.c
 EXE = ./dist/main
-CFLAGS = -Wall
+CFLAGS = -Wall -g -lc
 
 all: $(EXE)
 	$(EXE)
