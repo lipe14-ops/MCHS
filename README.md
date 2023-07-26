@@ -3,21 +3,26 @@
 my own implementation of a http server in c programming language.
 
 ## references:
-mozilla doc: https://developer.mozilla.org/en-US/docs/Web/HTTP
+- https://developer.mozilla.org/en-US/docs/Web/HTTP
 
 ## project:
 boredom and curiosity brought me here. It's just for fun purpose, the http protocol is intensionally incomplete.
-### todo:
-- [x] TCP/IP sockets connections.
-- [x] incomplete HTTP protocol support (simple headers, GET method, data transfer).
-- [x] Serve files (txt, html, xml, etc...).
-- [ ] Routes support.
-- [ ] chunked transfer encoding (streams)
+
+<details>
+<summary markdown="span">todo list</summary> 
+    
+ - [x] TCP/IP sockets connections.
+ - [x] incomplete HTTP protocol support (simple headers, GET method, data transfer).
+ - [x] Serve files (txt, html, xml, etc...).
+ - [ ] Routes support.
+ - [ ] chunked transfer encoding (streams)
+
+</details>
 
 ## run:
 ```console
-git clone https://github.com/lipe14-ops/mchs
-cd mchs
+git clone https://github.com/lipe14-ops/MCHS
+cd MCHS
 make
 ``` 
 
