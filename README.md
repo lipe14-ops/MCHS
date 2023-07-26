@@ -10,7 +10,7 @@ boredom and curiosity brought me here. It's just for fun purpose, the http proto
 ### todo:
 - [x] TCP/IP sockets connections.
 - [x] incomplete HTTP protocol support (simple headers, GET method, data transfer).
-- [ ] Serve files (txt, html, xml, etc...).
+- [x] Serve files (txt, html, xml, etc...).
 - [ ] Routes support.
 - [ ] chunked transfer encoding (streams)
 
