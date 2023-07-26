@@ -88,9 +88,38 @@ void sendHTTPResponse(HTTPClient client, HTTPResponse response) {
   send(client.fd, message, sizeof(message), MSG_OOB);
 }
 
+typedef struct {
+  int size;
+  char * content;
+} FileData;
+
+FileData getFileData(char * filepath) {
+  char * real_filepath = realpath(filepath, 0);
+  FILE * fd = fopen(real_filepath, "r");
+
+  if (fd == NULL) {
+    fprintf(stderr, "ERROR: filepath is not valid.\n");
+    exit(-1);
+  }
+
+  fseek(fd, 0, SEEK_END);
+  int contentLength = ftell(fd);
+  rewind(fd);
+
+  FileData file = {
+    .size = contentLength,
+    .content = (char *) calloc(contentLength, sizeof(char))
+  };
+
+  fread(file.content, contentLength, 1, fd);
+  fclose(fd);
+  return file;
+}
+  
 int main(void) {
   HTTPServer server = openHTTPServer("MCHS", "127.0.0.1", PORT);
   HTTPClient client;
+
 
   printf("> %s is listening on port: %d.\n", server.name, server.port);
 
@@ -105,9 +134,11 @@ int main(void) {
 
     printf("the server %s got %d bytes of data.\n", server.name, receivedDataSize);
 
+    FileData file = getFileData("./templates/index.html");
+
     HTTPResponse response = {
-      .header = "HTTP/1.1 200 OK\nContent-Type: text/plain\nConnection: close",
-      .body = "oi cara de boi."
+      .header = "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close",
+      .body = file.content
     };
 
     if (request.isValid) {
