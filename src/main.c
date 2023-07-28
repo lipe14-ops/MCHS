@@ -132,10 +132,60 @@ FileData getFileData(char * filepath) {
   fclose(fd);
   return file;
 }
+
+typedef struct {
+  char * path;
+  char * method;
+  void (*controller)(HTTPRequest, HTTPClient);
+} HTTPRoute;
+
+typedef struct {
+  HTTPRoute * routes;
+  size_t routesCount;
+} HTTPServerRouter;
+
+HTTPServerRouter newHTTPServerRouter() {
+  return (HTTPServerRouter) {
+    .routes = (HTTPRoute *) malloc(sizeof(HTTPRoute)),
+    .routesCount = 0,
+  };
+}
+
+void addHTTPServerRoute(HTTPServerRouter * router, HTTPRoute route) {
+  router->routes =  (HTTPRoute *) realloc(router->routes, sizeof(HTTPRoute) * (++router->routesCount + 1));
+  router->routes[router->routesCount - 1] = route;
+}
+
+HTTPRoute * HandlerHTTPServerRoutes(HTTPServerRouter router, HTTPRequest request) {
+  for (size_t i = 0; i < router.routesCount; ++i) {
+    HTTPRoute route = router.routes[i];
+    if (strcmp(request.header.method, route.method) == 0 && strcmp(request.header.path, route.path) == 0) {
+      return &router.routes[i];
+    }
+  }
+  return NULL;
+}
+
+void indexPageController(HTTPRequest request, HTTPClient client) {
+  FileData file = getFileData("./templates/index.html");
+
+  HTTPResponse response = {
+    .header = "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close",
+    .body = file.content
+  };
+  sendHTTPResponse(client, response);
+}
   
 int main(void) {
   HTTPServer server = openHTTPServer("MCHS", "127.0.0.1", PORT);
+  HTTPServerRouter router = newHTTPServerRouter();
   HTTPClient client;
+
+  addHTTPServerRoute(&router, (HTTPRoute) {
+    .method = "GET",
+    .path = "/",
+    .controller = indexPageController
+  });
 
   printf("> %s is listening on port: %d.\n", server.name, server.port);
 
@@ -148,20 +198,22 @@ int main(void) {
 
     HTTPRequest request = serializeHTTPRequest(request_buffer);
 
-    printf("the server %s got %d bytes of data.\n", server.name, receivedDataSize);
+    FileData file = getFileData("./templates/404.html");
 
-    FileData file = getFileData("./templates/index.html");
-
-    HTTPResponse response = {
-      .header = "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close",
+    HTTPResponse notFoundResponse = {
+      .header = "HTTP/1.1 404 Not found\nContent-Type: text/html\nConnection: close",
       .body = file.content
     };
 
-    if (request.isValid) {
-      printf("%s %s\n", request.header.method, request.header.path);
+    HTTPRoute * route = HandlerHTTPServerRoutes(router, request);
+
+    if (request.isValid && route != NULL) {
+      route->controller(request, client);
+      printf("size: %d method: %s path: %s\n", receivedDataSize, request.header.method, request.header.path);
+    } else if (request.isValid) {
+      sendHTTPResponse(client, notFoundResponse);
     }
 
-    sendHTTPResponse(client, response);
     free(request.header.data);
     close(client.fd);
   }
