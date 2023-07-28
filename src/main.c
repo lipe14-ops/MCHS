@@ -51,28 +51,45 @@ typedef struct {
   int fd;
   struct sockaddr_in core;
 } HTTPClient;
+
+typedef struct {
+  char * method;
+  char * path;
+  char * data; 
+} HTTPRequestHeader;
+
+HTTPRequestHeader serializeHTTPRequestHeader(char * header) {
+  return (HTTPRequestHeader) {
+    .method = strtok(header, " "),
+    .path = strtok(NULL, " "),
+    .data = header,
+  };
+}
   
 typedef struct {
   bool isValid;
-  char * header;
+  HTTPRequestHeader header;
   char * body;
 } HTTPRequest; 
 
 HTTPRequest serializeHTTPRequest(char * buffer) {
-  char * delimitler = strstr(buffer, "\r\n\r\n");
+  char * delimiter_ptr = strstr(buffer, "\r\n\r\n");
 
-  if (delimitler == NULL) 
+  if (delimiter_ptr == NULL) 
     return (HTTPRequest) { 0 };
   
-  int header_size = (int) (delimitler - buffer);
+  int header_size = (int) (delimiter_ptr - buffer);
 
   HTTPRequest request = {
     .isValid = true,
-    .header = (char *) calloc(header_size, sizeof(char)),
-    .body = delimitler + 5
+    .body = delimiter_ptr + strlen(delimiter_ptr) + 1
   };
 
-  memcpy(request.header, buffer, header_size);
+  if (request.isValid) {
+    char * header_data = (char *) calloc(header_size, sizeof(char));
+    memcpy(header_data, buffer, header_size);
+    request.header = serializeHTTPRequestHeader(header_data);
+  }
 
   return request;
 }
@@ -120,7 +137,6 @@ int main(void) {
   HTTPServer server = openHTTPServer("MCHS", "127.0.0.1", PORT);
   HTTPClient client;
 
-
   printf("> %s is listening on port: %d.\n", server.name, server.port);
 
   while (true) {
@@ -142,11 +158,11 @@ int main(void) {
     };
 
     if (request.isValid) {
-      printf("%s\n", request.header);
+      printf("%s %s\n", request.header.method, request.header.path);
     }
 
     sendHTTPResponse(client, response);
-    free(request.header);
+    free(request.header.data);
     close(client.fd);
   }
 
