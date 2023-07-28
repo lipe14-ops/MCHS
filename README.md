@@ -9,12 +9,12 @@ my own implementation of a http server in c programming language.
 boredom and curiosity brought me here. It's just for fun purpose, the http protocol is intensionally incomplete.
 
 <details>
-<summary markdown="span">todo list</summary> 
+<summary markdown="span"><h3>todo list</h3></summary> 
     
  - [x] TCP/IP sockets connections.
  - [x] incomplete HTTP protocol support (simple headers, GET method, data transfer).
  - [x] Serve files (txt, html, xml, etc...).
- - [ ] Routes support.
+ - [x] Routes support.
  - [ ] chunked transfer encoding (streams)
 
 </details>

@@ -51,28 +51,45 @@ typedef struct {
   int fd;
   struct sockaddr_in core;
 } HTTPClient;
+
+typedef struct {
+  char * method;
+  char * path;
+  char * data; 
+} HTTPRequestHeader;
+
+HTTPRequestHeader serializeHTTPRequestHeader(char * header) {
+  return (HTTPRequestHeader) {
+    .method = strtok(header, " "),
+    .path = strtok(NULL, " "),
+    .data = header,
+  };
+}
   
 typedef struct {
   bool isValid;
-  char * header;
+  HTTPRequestHeader header;
   char * body;
 } HTTPRequest; 
 
 HTTPRequest serializeHTTPRequest(char * buffer) {
-  char * delimitler = strstr(buffer, "\r\n\r\n");
+  char * delimiter_ptr = strstr(buffer, "\r\n\r\n");
 
-  if (delimitler == NULL) 
+  if (delimiter_ptr == NULL) 
     return (HTTPRequest) { 0 };
   
-  int header_size = (int) (delimitler - buffer);
+  int header_size = (int) (delimiter_ptr - buffer);
 
   HTTPRequest request = {
     .isValid = true,
-    .header = (char *) calloc(header_size, sizeof(char)),
-    .body = delimitler + 5
+    .body = delimiter_ptr + strlen(delimiter_ptr) + 1
   };
 
-  memcpy(request.header, buffer, header_size);
+  if (request.isValid) {
+    char * header_data = (char *) calloc(header_size, sizeof(char));
+    memcpy(header_data, buffer, header_size);
+    request.header = serializeHTTPRequestHeader(header_data);
+  }
 
   return request;
 }
@@ -115,11 +132,60 @@ FileData getFileData(char * filepath) {
   fclose(fd);
   return file;
 }
+
+typedef struct {
+  char * path;
+  char * method;
+  void (*controller)(HTTPRequest, HTTPClient);
+} HTTPRoute;
+
+typedef struct {
+  HTTPRoute * routes;
+  size_t routesCount;
+} HTTPServerRouter;
+
+HTTPServerRouter newHTTPServerRouter() {
+  return (HTTPServerRouter) {
+    .routes = (HTTPRoute *) malloc(sizeof(HTTPRoute)),
+    .routesCount = 0,
+  };
+}
+
+void addHTTPServerRoute(HTTPServerRouter * router, HTTPRoute route) {
+  router->routes =  (HTTPRoute *) realloc(router->routes, sizeof(HTTPRoute) * (++router->routesCount + 1));
+  router->routes[router->routesCount - 1] = route;
+}
+
+HTTPRoute * HandlerHTTPServerRoutes(HTTPServerRouter router, HTTPRequest request) {
+  for (size_t i = 0; i < router.routesCount; ++i) {
+    HTTPRoute route = router.routes[i];
+    if (strcmp(request.header.method, route.method) == 0 && strcmp(request.header.path, route.path) == 0) {
+      return &router.routes[i];
+    }
+  }
+  return NULL;
+}
+
+void indexPageController(HTTPRequest request, HTTPClient client) {
+  FileData file = getFileData("./templates/index.html");
+
+  HTTPResponse response = {
+    .header = "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close",
+    .body = file.content
+  };
+  sendHTTPResponse(client, response);
+}
   
 int main(void) {
   HTTPServer server = openHTTPServer("MCHS", "127.0.0.1", PORT);
+  HTTPServerRouter router = newHTTPServerRouter();
   HTTPClient client;
 
+  addHTTPServerRoute(&router, (HTTPRoute) {
+    .method = "GET",
+    .path = "/",
+    .controller = indexPageController
+  });
 
   printf("> %s is listening on port: %d.\n", server.name, server.port);
 
@@ -132,21 +198,23 @@ int main(void) {
 
     HTTPRequest request = serializeHTTPRequest(request_buffer);
 
-    printf("the server %s got %d bytes of data.\n", server.name, receivedDataSize);
+    FileData file = getFileData("./templates/404.html");
 
-    FileData file = getFileData("./templates/index.html");
-
-    HTTPResponse response = {
-      .header = "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close",
+    HTTPResponse notFoundResponse = {
+      .header = "HTTP/1.1 404 Not found\nContent-Type: text/html\nConnection: close",
       .body = file.content
     };
 
-    if (request.isValid) {
-      printf("%s\n", request.header);
+    HTTPRoute * route = HandlerHTTPServerRoutes(router, request);
+
+    if (request.isValid && route != NULL) {
+      route->controller(request, client);
+      printf("size: %d method: %s path: %s\n", receivedDataSize, request.header.method, request.header.path);
+    } else if (request.isValid) {
+      sendHTTPResponse(client, notFoundResponse);
     }
 
-    sendHTTPResponse(client, response);
-    free(request.header);
+    free(request.header.data);
     close(client.fd);
   }
 
